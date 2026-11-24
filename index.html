@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>六合一人格測驗｜Inner Atlas 心象研究所</title>
+<meta name="description" content="一次作答 104 題，同時得到大五人格、16 型人格、HEXACO、DISC 職場風格、親密關係依附與霍蘭德職涯興趣六份報告。">
+<meta property="og:title" content="六合一人格測驗｜Inner Atlas 心象研究所">
+<meta property="og:description" content="一次作答，六種看見自己的方式。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#3b2a22">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&family=Pinyon+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="#home"><span class="mark">Inner Atlas</span><small>心象研究所</small></a>
+  <div class="links" id="links">
+    <a href="#home" data-v="home">測驗介紹</a>
+    <a href="#quiz" data-v="quiz">開始作答</a>
+    <a href="#report" data-v="report">我的報告</a>
+    <a href="#admin" data-v="admin" id="adminLink" hidden>資料管理</a>
+  </div>
+</div></nav>
+
+<main class="wrap">
+<!-- HOME -->
+<section class="view" id="v-home">
+  <div class="ticket">
+    <div class="main">
+      <div class="tk-top"><span>綜合人格與職涯探索</span><span class="tk-no">NO. 2026-V3</span></div>
+      <h1>六合一人格測驗</h1>
+      <div class="sub">一次作答，六種看見自己的方式</div>
+      <div class="meta">
+        <div><span>題數</span><b>104 題</b></div>
+        <div><span>作答時間</span><b>約 15–20 分鐘</b></div>
+        <div><span>報告內容</span><b>6 大測驗</b></div>
+        <div><span>作答方式</span><b>5 點量尺</b></div>
+      </div>
+    </div>
+    <div class="stub">
+      <h3>Personality &amp; Career</h3>
+      <p>同一題會同時計入多個測驗，104 題就能得到 244 個題次的分析。</p>
+      <a class="btn acc" href="#quiz" id="ctaStart">開始作答</a>
+      <button class="btn ghost" id="ctaSample" type="button">看範例報告</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><h2>六大測驗模組</h2><p>題目共用，結果分開解讀</p></div>
+    <div class="grid3" id="mods"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><h2>作答路線</h2><p>分三段進行，避免情境頻繁跳躍</p></div>
+    <div class="road">
+      <div class="step"><b>第一段</b><span>性格與職場 74 題</span></div>
+      <div class="step"><b>第二段</b><span>親密關係 12 題，可略過</span></div>
+      <div class="step"><b>第三段</b><span>職涯興趣 18 題</span></div>
+      <div class="step"><b>完成</b><span>產生六大測驗報告</span></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h"><h2>作答前請知道</h2></div>
+    <div class="notes">
+      <div><h3>這不是診斷</h3><p>結果描述的是傾向，沒有好壞之分，也不能取代專業心理評估。分數高低以題目本身的 0–100% 計算，不是和其他人比較的排名。</p></div>
+      <div><h3>依直覺作答</h3><p>每題沒有標準答案，請依「平常的自己」作答，不必想像理想中的樣子。中途離開時，進度會保留在這個瀏覽器。</p></div>
+      <div><h3>資料如何保存</h3><p>完成後，作答與分數會以隨機產生的匿名代號存入本站資料庫，只有網站管理者能檢視與匯出，用於研究統計。你也可以下載 PDF 報告與摘要圖卡。</p></div>
+      <div><h3>量表來源</h3><p>大五：IPIP-50（公有領域）；誠實謙遜：HEXACO-60（非商業使用）；依附：ECR-12；職涯：O*NET 興趣量表改編；DISC 與 16 型補強題為本站自編。16 型結果由大五相關推估，非官方 MBTI®。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- QUIZ -->
+<section class="view" id="v-quiz">
+  <div class="qhead">
+    <h2 id="qTitle">第一段・性格與職場</h2>
+    <div class="cnt" id="qCnt">0 / 104</div>
+    <div class="bar"><i id="qBar" style="width:0"></i></div>
+  </div>
+  <div id="qBody"></div>
+  <div class="pager">
+    <button class="btn ghost" id="prev" type="button" style="background:var(--card)">上一頁</button>
+    <span class="hint" id="hint"></span>
+    <button class="btn acc" id="next" type="button">下一頁</button>
+  </div>
+</section>
+
+<!-- REPORT -->
+<section class="view" id="v-report"><div id="rBody"></div></section>
+
+<!-- ADMIN -->
+<section class="view" id="v-admin"><div id="aBody"></div></section>
+</main>
+<footer>Inner Atlas 心象研究所・題庫 v3・本測驗僅供自我探索參考</footer>
+<div class="toast" id="toast" role="status"></div>
+<div id="shareCard" aria-hidden="true"></div>
+
+<script src="assets/items.js"></script>
+<script src="assets/scoring.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
