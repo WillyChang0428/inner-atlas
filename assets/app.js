@@ -2,8 +2,6 @@
 {
 const ITEMS = window.INNER_ITEMS;
 const {score, derive, AXES, VERSION} = window.InnerScoring;
-// 是否蒐集作答資料：在 assets/config.js 設定。預設關閉，作答只保存在填答者的瀏覽器。
-const COLLECT = !!(window.INNER_CONFIG && window.INNER_CONFIG.collect === true);
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct = v => Math.round(v);
@@ -104,30 +102,13 @@ function portrait(sc, dv, who = '你') {
 const KEY = 'innerAtlas.' + VERSION + '.';
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(KEY + k)); } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} },
-  del(k) { try { localStorage.removeItem(KEY + k); } catch (e) {} }
+  set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} }
 };
-const sess = {
-  get(k) { try { return sessionStorage.getItem(KEY + k); } catch (e) { return null; } },
-  set(k, v) { try { v == null ? sessionStorage.removeItem(KEY + k) : sessionStorage.setItem(KEY + k, v); } catch (e) {} }
-};
-let S = {ans:{}, page:-1, skipEcr:false, age:'', gender:''};
-let RESULT = null, SAMPLE = false, saveNote = '', API = false;
+let S = {ans:{}, page:-1, skipEcr:false};
+let RESULT = null, SAMPLE = false, saveNote = '';
 const ownResult = () => RESULT;
 const toast = (m, stay) => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); if (!stay) toast.h = setTimeout(() => t.classList.remove('on'), 2400); };
 const persist = () => store.set('draft', S);
-function rid() {
-  let id = store.get('rid');
-  if (!id) { id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12); store.set('rid', id); }
-  return id;
-}
-async function api(path, opt = {}) {
-  const res = await fetch('/api/' + path, {method: opt.method || 'GET', headers: {'content-type': 'application/json', ...(opt.headers || {})}, body: opt.body ? JSON.stringify(opt.body) : undefined});
-  let data = null; try { data = await res.json(); } catch (e) {}
-  if (!res.ok) { const err = new Error((data && data.error) || res.statusText); err.status = res.status; throw err; }
-  return data;
-}
-const READY = COLLECT ? api('health').then(d => { API = !!(d && d.db); }).catch(() => { API = false; }) : Promise.resolve();
 /* ---------- quiz ---------- */
 const OPT = ['非常不符合','不太符合','普通','蠻符合','非常符合'];
 function renderQuiz() {
@@ -138,16 +119,7 @@ function renderQuiz() {
   if (S.page < 0) {
     $('#qTitle').textContent = '作答前';
     const lead = `<p>接下來共 104 題，請依「平常的自己」選擇最符合的程度：1 非常不符合，5 非常符合。進度會自動保留在這個瀏覽器。</p>`;
-    body.innerHTML = `<div class="intro"><h3>開始之前</h3>${lead}` + (COLLECT ? `
-      <div class="form"><label for="age">年齡區間（選填）<select id="age">${['','18 歲以下','18–24','25–34','35–44','45–54','55 以上'].map(v => `<option value="${v}"${S.age === v ? ' selected' : ''}>${v || '不填'}</option>`).join('')}</select></label>
-      <label for="gender">性別（選填）<select id="gender">${['','女','男','其他／不願透露'].map(v => `<option value="${v}"${S.gender === v ? ' selected' : ''}>${v || '不填'}</option>`).join('')}</select></label></div>
-      <label class="consent" for="consent"><input type="checkbox" id="consent"${S.consent ? ' checked' : ''}><span>我同意將這次的作答與分數，以隨機產生的匿名代號提供本站做統計研究。不勾選也能正常作答與查看報告，資料只會留在你的瀏覽器。</span></label></div>`
-      : `<p>你的作答與結果只會保存在這個瀏覽器，本站不會蒐集或上傳任何資料。</p></div>`);
-    if (COLLECT) {
-      $('#age').onchange = e => { S.age = e.target.value; persist(); };
-      $('#gender').onchange = e => { S.gender = e.target.value; persist(); };
-      $('#consent').onchange = e => { S.consent = e.target.checked; persist(); };
-    }
+    body.innerHTML = `<div class="intro"><h3>開始之前</h3>${lead}<p>你的作答與結果只會保存在這個瀏覽器，本站不會蒐集或上傳任何資料。</p></div>`;
     $('#prev').hidden = true; $('#next').textContent = n ? '繼續作答' : '開始作答'; return;
   }
   const P = PAGES[S.page], secPages = PAGES.filter(p => p.s === P.s), idx = secPages.indexOf(P) + 1;
@@ -181,25 +153,13 @@ $('#next').onclick = async () => {
   if (S.page === PAGES.length - 1) return finish();
   S.page++; persist(); renderQuiz(); scrollTo(0, 0);
 };
-async function finish() {
+function finish() {
   const ans = {...S.ans}; if (S.skipEcr) ITEMS.filter(i => i.g === 'ECR-12依附').forEach(i => delete ans[i.id]);
   const sc = score(ans, S.skipEcr);
-  const ok = COLLECT && !!S.consent;
-  RESULT = {at: new Date().toISOString(), v: VERSION, ans, sc, skipEcr: S.skipEcr, age: ok ? S.age : '', gender: ok ? S.gender : '', consent: ok};
+  RESULT = {at: new Date().toISOString(), v: VERSION, ans, sc, skipEcr: S.skipEcr};
   SAMPLE = false; store.set('last', RESULT);
-  S = {ans:{}, page:-1, skipEcr:false, age:RESULT.age, gender:RESULT.gender, consent:RESULT.consent}; persist();
-  saveNote = ok ? '正在儲存…' : localNote(); location.hash = 'report'; route();
-  await saveRemote(RESULT); if (location.hash === '#report') renderReport();
-}
-function localNote() { return COLLECT ? '你沒有勾選同意，結果只保存在這個瀏覽器。' : '你的作答只保存在這個瀏覽器，本站不會蒐集。'; }
-async function saveRemote(r) {
-  if (!r.consent) { saveNote = localNote(); return; }
-  await READY;
-  if (!API) { saveNote = '這個網站沒有連接資料庫，結果只保存在這個瀏覽器。'; return; }
-  try {
-    const d = await api('submit', {method: 'POST', body: {consent: true, respondentId: rid(), at: r.at, version: r.v, age: r.age, gender: r.gender, skipEcr: r.skipEcr, ans: r.ans}});
-    r.id = d.id; store.set('last', r); saveNote = '已儲存到本站資料庫。';
-  } catch (e) { saveNote = '儲存失敗，結果先保存在這個瀏覽器。'; }
+  S = {ans:{}, page:-1, skipEcr:false}; persist();
+  saveNote = '你的作答只保存在這個瀏覽器，本站不會蒐集。'; location.hash = 'report';
 }
 
 /* ---------- charts ---------- */
@@ -339,18 +299,9 @@ function showSample() {
   SAMPLE = true; location.hash = 'report'; route();
 }
 
-/* ---------- export ---------- */
-const IDS = ITEMS.map(i => i.id);
-function toCsv(list) {
-  const sk = {big5: Object.keys(B5), mbti: AXES.map(a => a[0]), hexaco: Object.keys(HX), disc: ['D','I','S','C'], ecr: ['焦慮','逃避'], riasec: 'RIASEC'.split('')};
-  const head = ['匿名代號','作答時間','題庫版本','年齡區間','性別','略過依附', ...IDS, ...Object.entries(sk).flatMap(([t, ks]) => ks.map(k => t === 'mbti' ? `mbti_${k}(${k[0]}%)` : `${t}_${k}`)), '16型','DISC型','依附類型','職涯三碼'];
-  const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const lines = list.map(({uid: u, r}) => { const dv = derive(r.sc); return [u, r.at, r.v, r.age, r.gender, r.skipEcr ? 1 : 0, ...IDS.map(i => r.ans[i] ?? ''), ...Object.entries(sk).flatMap(([t, ks]) => ks.map(k => r.sc[t] && r.sc[t][k] != null ? r.sc[t][k].toFixed(1) : '')), dv.code, dv.disc, dv.ecr || '', dv.ri3].map(q).join(','); });
-  return '﻿' + [head.map(q).join(','), ...lines].join('\n');
-}
+/* ---------- download ---------- */
 function save(name, data) {
-  const type = name.endsWith('.csv') ? 'text/csv;charset=utf-8' : name.endsWith('.json') ? 'application/json' : '';
-  const blob = data instanceof Blob ? data : new Blob([data], {type});
+  const blob = data instanceof Blob ? data : new Blob([data]);
   const url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -476,68 +427,21 @@ function loadShared(h) {
   renderReport();
 }
 
-/* ---------- admin ---------- */
-let ALL = [];
-const panel = h => `<div class="sec" style="margin-top:0">${h}</div>`;
-async function renderAdmin(msg) {
-  const el = $('#aBody');
-  if (!COLLECT) { el.innerHTML = `<div class="empty"><h2>資料管理</h2><p style="margin-top:10px">本站目前沒有開啟資料蒐集，所以沒有作答資料。若要開啟，請見專案 README 的「開啟資料蒐集」。</p></div>`; return; }
-  await READY;
-  if (!API) { el.innerHTML = `<div class="empty"><h2>資料管理</h2><p style="margin-top:10px">這個網站沒有連接資料庫，所以沒有可管理的作答資料。設定方式請見專案的 README。</p></div>`; return; }
-  const pw = sess.get('admin');
-  if (!pw) {
-    el.innerHTML = panel(`<h2>資料管理</h2><form id="admForm" class="form" style="max-width:520px;grid-template-columns:minmax(0,1fr) auto;align-items:end">
-      <label for="admPw">管理密碼<input id="admPw" type="password" autocomplete="current-password" required style="min-height:46px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper);padding:0 12px;font-size:16px"></label>
-      <button class="btn" type="submit">登入</button></form><p class="status" id="admMsg">${esc(msg || '請輸入部署時設定的 ADMIN_PASSWORD。')}</p>`);
-    $('#admForm').onsubmit = e => { e.preventDefault(); sess.set('admin', $('#admPw').value); renderAdmin(); };
-    return;
-  }
-  el.innerHTML = panel('<p>讀取中…</p>');
-  try {
-    const rows = []; let before = '';
-    do {
-      const d = await api('admin?limit=1000' + (before ? '&before=' + encodeURIComponent(before) : ''), {headers: {'x-admin-password': pw}});
-      rows.push(...(d.rows || [])); before = d.next || '';
-      if (before) el.innerHTML = panel(`<p>讀取中…已取得 ${rows.length} 筆</p>`);
-    } while (before);
-    ALL = rows.map(x => ({uid: x.respondentId, r: {at: x.takenAt || x.createdAt, v: x.version, age: x.age, gender: x.gender, skipEcr: x.skipEcr, ans: x.answers || {}, sc: x.scores}})).filter(x => x.r.sc);
-  } catch (e) {
-    if (e.status === 401) { sess.set('admin', null); return renderAdmin('密碼不正確，請再試一次。'); }
-    el.innerHTML = panel(`<p>讀取失敗：${esc(e.message)}</p>`); return;
-  }
-  $('#adminLink').hidden = false;
-  const people = new Set(ALL.map(x => x.uid)).size, skipped = ALL.filter(x => x.r.skipEcr).length;
-  const avg = k => ALL.length ? pct(ALL.reduce((s, x) => s + x.r.sc.big5[k], 0) / ALL.length) : '–';
-  el.innerHTML = panel(`<div class="sec-h"><h2>作答資料</h2><div class="actions"><button class="btn" id="exCsv" type="button">匯出全部 CSV</button><button class="btn ghost" id="exJson" type="button">匯出 JSON</button><button class="btn ghost" id="reAdm" type="button">重新整理</button><button class="btn ghost" id="outAdm" type="button">登出</button></div></div>
-    <div class="kpis"><div><span>作答人數</span><b>${people}</b></div><div><span>作答次數</span><b>${ALL.length}</b></div><div><span>略過依附段</span><b>${skipped}</b></div><div><span>平均外向性</span><b>${avg('E')}</b></div><div><span>平均神經質</span><b>${avg('N')}</b></div></div>
-    ${ALL.length ? `<div class="scroll"><table><thead><tr><th>作答時間</th><th>匿名代號</th><th>年齡</th><th>性別</th><th>16 型</th><th>DISC</th><th>依附</th><th>三碼</th><th>H</th></tr></thead><tbody>${ALL.slice(0, 200).map(({uid: u, r}) => { const dv = derive(r.sc); return `<tr><td>${esc(String(r.at).slice(0, 16).replace('T', ' '))}</td><td>${esc(String(u).slice(0, 8))}</td><td>${esc(r.age || '–')}</td><td>${esc(r.gender || '–')}</td><td>${esc(dv.code)}</td><td>${esc(dv.disc)}</td><td>${esc(dv.ecr || '略過')}</td><td>${esc(dv.ri3)}</td><td>${pct(r.sc.hexaco.H)}</td></tr>`; }).join('')}</tbody></table></div><p class="status">表格顯示最新 200 筆；匯出包含全部 ${ALL.length} 筆的 104 題原始作答與各維度分數。</p>` : '<p>還沒有人完成測驗。</p>'}`);
-  const stamp = new Date().toISOString().slice(0, 10);
-  $('#exCsv').onclick = () => save(`心象研究所_全部作答_${stamp}.csv`, toCsv(ALL));
-  $('#exJson').onclick = () => save(`心象研究所_全部作答_${stamp}.json`, JSON.stringify(ALL, null, 1));
-  $('#reAdm').onclick = () => renderAdmin();
-  $('#outAdm').onclick = () => { sess.set('admin', null); $('#adminLink').hidden = true; renderAdmin(); };
-}
-
 /* ---------- routing & boot ---------- */
 function route() {
   const h = location.hash.slice(1), sh = /^r-[A-Za-z0-9_-]{60,400}$/.test(h);
   SHOW = sh ? 'shared' : null;
-  const v = sh ? 'report' : ['home','quiz','report','admin'].includes(h) ? h : 'home';
+  const v = sh ? 'report' : ['home','quiz','report'].includes(h) ? h : 'home';
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   document.querySelectorAll('#links a').forEach(a => a.dataset.v === v && !sh ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   if (v === 'quiz') renderQuiz();
   if (sh) loadShared(h.slice(2)); else if (v === 'report') renderReport();
-  if (v === 'admin') renderAdmin();
   scrollTo(0, 0);
 }
 addEventListener('hashchange', route);
 $('#ctaSample').onclick = showSample;
 const d0 = store.get('draft'); if (d0 && d0.ans) S = d0;
 const l0 = store.get('last'); if (l0 && l0.sc) { RESULT = l0; saveNote = '這是你在這個瀏覽器的最近一次結果。'; }
-$('#dataNote').textContent = COLLECT
-  ? '開始作答前可以選擇是否同意提供資料。同意的話，作答與分數會以隨機產生的匿名代號存入本站資料庫，只有網站管理者能檢視，用於統計研究；不同意也能正常作答。'
-  : '你的作答與結果只會保存在這個瀏覽器，本站不會蒐集或上傳任何資料。可以下載 PDF 報告與摘要圖卡留存。';
-if (sess.get('admin')) $('#adminLink').hidden = false;
 route();
 
 }

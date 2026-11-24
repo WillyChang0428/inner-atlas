@@ -1,4 +1,4 @@
-/* 六合一人格測驗：計分核心（瀏覽器與 Vercel API 共用）。
+/* 六合一人格測驗：計分核心（瀏覽器使用；也可在 Node 中 require 做測試）。
    規則：原始作答 × 帶正負號權重；MBTI 各軸兩端題組分開計算後平均；結果四捨五入到小數一位。 */
 (function (root) {
   const isNode = typeof module === 'object' && module.exports;

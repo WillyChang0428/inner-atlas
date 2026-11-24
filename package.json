@@ -1,15 +1,12 @@
 {
   "name": "inner-atlas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Inner Atlas 心象研究所：六合一人格與職涯測驗網站",
+  "description": "Inner Atlas 心象研究所：六合一人格與職涯測驗（純靜態網站）",
   "scripts": {
     "dev": "node scripts/dev-server.js",
     "test": "node scripts/test-scoring.js",
     "build:items": "python3 scripts/build_items.py \"data/六合一人格職涯測驗題庫_v3.xlsx\" assets/items.js"
-  },
-  "dependencies": {
-    "@neondatabase/serverless": "^1.0.2"
   },
   "engines": {
     "node": ">=18"
