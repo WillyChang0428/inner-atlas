@@ -1,4 +1,4 @@
-// POST /api/submit：儲存一次完整作答。分數由伺服器重新計算。
+// POST /api/submit：儲存一次完整作答（填答者須勾選同意）。分數由伺服器重新計算。
 const crypto = require('crypto');
 const {handler, send, readJson, fail} = require('../lib/http.js');
 const {getStore} = require('../lib/store.js');
@@ -8,6 +8,7 @@ module.exports = handler(['POST'], async (req, res) => {
   const store = getStore();
   if (!store) throw fail(503, '尚未設定資料庫');
   const body = await readJson(req);
+  if (body.consent !== true) throw fail(400, '填答者未同意提供資料');
   const respondentId = String(body.respondentId || '');
   if (!/^[A-Za-z0-9_-]{6,64}$/.test(respondentId)) throw fail(400, '匿名代號格式錯誤');
   const {ans, skipEcr, scores} = checkAnswers(body);

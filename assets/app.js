@@ -2,6 +2,8 @@
 {
 const ITEMS = window.INNER_ITEMS;
 const {score, derive, AXES, VERSION} = window.InnerScoring;
+// 是否蒐集作答資料：在 assets/config.js 設定。預設關閉，作答只保存在填答者的瀏覽器。
+const COLLECT = !!(window.INNER_CONFIG && window.INNER_CONFIG.collect === true);
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct = v => Math.round(v);
@@ -125,7 +127,7 @@ async function api(path, opt = {}) {
   if (!res.ok) { const err = new Error((data && data.error) || res.statusText); err.status = res.status; throw err; }
   return data;
 }
-const READY = api('health').then(d => { API = !!(d && d.db); }).catch(() => { API = false; });
+const READY = COLLECT ? api('health').then(d => { API = !!(d && d.db); }).catch(() => { API = false; }) : Promise.resolve();
 /* ---------- quiz ---------- */
 const OPT = ['非常不符合','不太符合','普通','蠻符合','非常符合'];
 function renderQuiz() {
@@ -135,12 +137,17 @@ function renderQuiz() {
   $('#hint').textContent = '';
   if (S.page < 0) {
     $('#qTitle').textContent = '作答前';
-    body.innerHTML = `<div class="intro"><h3>開始之前</h3><p>接下來共 104 題，請依「平常的自己」選擇最符合的程度：1 非常不符合，5 非常符合。進度會自動保留。</p>
+    const lead = `<p>接下來共 104 題，請依「平常的自己」選擇最符合的程度：1 非常不符合，5 非常符合。進度會自動保留在這個瀏覽器。</p>`;
+    body.innerHTML = `<div class="intro"><h3>開始之前</h3>${lead}` + (COLLECT ? `
       <div class="form"><label for="age">年齡區間（選填）<select id="age">${['','18 歲以下','18–24','25–34','35–44','45–54','55 以上'].map(v => `<option value="${v}"${S.age === v ? ' selected' : ''}>${v || '不填'}</option>`).join('')}</select></label>
       <label for="gender">性別（選填）<select id="gender">${['','女','男','其他／不願透露'].map(v => `<option value="${v}"${S.gender === v ? ' selected' : ''}>${v || '不填'}</option>`).join('')}</select></label></div>
-      <p>選填資料只用於整體統計。完成後，結果會以隨機產生的匿名代號存入本站資料庫。</p></div>`;
-    $('#age').onchange = e => { S.age = e.target.value; persist(); };
-    $('#gender').onchange = e => { S.gender = e.target.value; persist(); };
+      <label class="consent" for="consent"><input type="checkbox" id="consent"${S.consent ? ' checked' : ''}><span>我同意將這次的作答與分數，以隨機產生的匿名代號提供本站做統計研究。不勾選也能正常作答與查看報告，資料只會留在你的瀏覽器。</span></label></div>`
+      : `<p>你的作答與結果只會保存在這個瀏覽器，本站不會蒐集或上傳任何資料。</p></div>`);
+    if (COLLECT) {
+      $('#age').onchange = e => { S.age = e.target.value; persist(); };
+      $('#gender').onchange = e => { S.gender = e.target.value; persist(); };
+      $('#consent').onchange = e => { S.consent = e.target.checked; persist(); };
+    }
     $('#prev').hidden = true; $('#next').textContent = n ? '繼續作答' : '開始作答'; return;
   }
   const P = PAGES[S.page], secPages = PAGES.filter(p => p.s === P.s), idx = secPages.indexOf(P) + 1;
@@ -177,17 +184,20 @@ $('#next').onclick = async () => {
 async function finish() {
   const ans = {...S.ans}; if (S.skipEcr) ITEMS.filter(i => i.g === 'ECR-12依附').forEach(i => delete ans[i.id]);
   const sc = score(ans, S.skipEcr);
-  RESULT = {at: new Date().toISOString(), v: VERSION, ans, sc, skipEcr: S.skipEcr, age: S.age, gender: S.gender};
+  const ok = COLLECT && !!S.consent;
+  RESULT = {at: new Date().toISOString(), v: VERSION, ans, sc, skipEcr: S.skipEcr, age: ok ? S.age : '', gender: ok ? S.gender : '', consent: ok};
   SAMPLE = false; store.set('last', RESULT);
-  S = {ans:{}, page:-1, skipEcr:false, age:RESULT.age, gender:RESULT.gender}; persist();
-  saveNote = '正在儲存…'; location.hash = 'report'; route();
+  S = {ans:{}, page:-1, skipEcr:false, age:RESULT.age, gender:RESULT.gender, consent:RESULT.consent}; persist();
+  saveNote = ok ? '正在儲存…' : localNote(); location.hash = 'report'; route();
   await saveRemote(RESULT); if (location.hash === '#report') renderReport();
 }
+function localNote() { return COLLECT ? '你沒有勾選同意，結果只保存在這個瀏覽器。' : '你的作答只保存在這個瀏覽器，本站不會蒐集。'; }
 async function saveRemote(r) {
+  if (!r.consent) { saveNote = localNote(); return; }
   await READY;
   if (!API) { saveNote = '這個網站沒有連接資料庫，結果只保存在這個瀏覽器。'; return; }
   try {
-    const d = await api('submit', {method: 'POST', body: {respondentId: rid(), at: r.at, version: r.v, age: r.age, gender: r.gender, skipEcr: r.skipEcr, ans: r.ans}});
+    const d = await api('submit', {method: 'POST', body: {consent: true, respondentId: rid(), at: r.at, version: r.v, age: r.age, gender: r.gender, skipEcr: r.skipEcr, ans: r.ans}});
     r.id = d.id; store.set('last', r); saveNote = '已儲存到本站資料庫。';
   } catch (e) { saveNote = '儲存失敗，結果先保存在這個瀏覽器。'; }
 }
@@ -269,10 +279,10 @@ function renderReport() {
     ${SAMPLE ? '' : `<button class="btn ghost" type="button" id="shrOpen" aria-expanded="false">分享連結</button>
     <div class="shr" id="shrBox" hidden>
       <label for="shrName">顯示名稱（選填）<input id="shrName" maxlength="20" placeholder="例如：小安"></label>
-      <button class="btn" type="button" id="shrGo">建立連結</button>
+      <button class="btn" type="button" id="shrGo">產生連結</button>
       <div id="shrOut" hidden><label for="shrUrl">分享連結<input id="shrUrl" readonly></label>
-        <div class="actions" style="margin-top:8px"><button class="btn ghost" type="button" id="shrCopy">複製連結</button><button class="btn ghost" type="button" id="shrStop">停止分享</button></div></div>
-      <p id="shrMsg">拿到連結的人都能看到這份報告；連結只包含分數，不含逐題作答。</p>
+        <div class="actions" style="margin-top:8px"><button class="btn ghost" type="button" id="shrCopy">複製連結</button></div></div>
+      <p id="shrMsg">分數與顯示名稱直接寫在連結裡，本站不會儲存。拿到連結的人都能看到，傳出後無法收回。</p>
     </div>`}
     <a class="btn acc" href="#quiz" id="again">重新作答</a>`}
   </div></div></div>
@@ -419,58 +429,60 @@ async function exportFile(kind, stem) {
   } catch (e) { toast('產生失敗，請確認網路連線後再試一次'); }
   finally { busy = false; btn.disabled = false; btn.textContent = label; }
 }
-function shareUrl(id) { return location.origin + location.pathname + '#r-' + id; }
+// 分享連結：把各維度分數與顯示名稱編碼進網址，不需要資料庫。
+// 格式（位元組）：版本 1｜旗標（bit0 略過依附）｜作答時間（2020 年起的分鐘數，3 bytes）｜28 個分數 ×10（各 2 bytes）｜顯示名稱 UTF-8
+const SKEYS = [['big5', ['E','A','C','N','O']], ['mbti', ['EI','SN','TF','JP','AT']], ['hexaco', ['H','E_hex','X','A','C','O']], ['disc', ['D','I','S','C']], ['ecr', ['焦慮','逃避']], ['riasec', ['R','I','A','S','E','C']]];
+const EPOCH = Date.UTC(2020, 0, 1);
+const b64u = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), c => c.charCodeAt(0));
+function encodeShare(r, name) {
+  const min = Math.max(0, Math.min(16777215, Math.round((Date.parse(r.at) - EPOCH) / 6e4) || 0));
+  const out = [1, r.skipEcr ? 1 : 0, min >> 16 & 255, min >> 8 & 255, min & 255];
+  for (const [t, ks] of SKEYS) for (const k of ks) { const v = Math.max(0, Math.min(1000, Math.round(((r.sc[t] && r.sc[t][k]) ?? 50) * 10))); out.push(v >> 8, v & 255); }
+  out.push(...new TextEncoder().encode(name.slice(0, 20)));
+  return b64u(out);
+}
+function decodeShare(t) {
+  const b = unb64u(t);
+  if (b[0] !== 1 || b.length < 61) throw new Error('bad');
+  const skip = !!(b[1] & 1), min = b[2] * 65536 + b[3] * 256 + b[4], sc = {};
+  let i = 5;
+  for (const [tt, ks] of SKEYS) { const o = {}; for (const k of ks) { o[k] = (b[i] * 256 + b[i + 1]) / 10; i += 2; } if (!(tt === 'ecr' && skip)) sc[tt] = o; }
+  let name = ''; try { name = new TextDecoder('utf-8', {fatal: true}).decode(b.slice(i)); } catch (e) {}
+  return cleanShared({at: new Date(EPOCH + min * 6e4).toISOString(), version: VERSION, skipEcr: skip, sc, name});
+}
 function wireShare(R0) {
-  const box = $('#shrBox'), msg = $('#shrMsg'), out = $('#shrOut');
-  const show = sh => { out.hidden = false; $('#shrUrl').value = shareUrl(sh.id); $('#shrGo').textContent = '更新分享內容'; $('#shrName').value = sh.name || ''; };
-  $('#shrOpen').onclick = async () => {
-    box.hidden = !box.hidden; $('#shrOpen').setAttribute('aria-expanded', String(!box.hidden));
-    if (box.hidden) return;
-    await READY;
-    if (!API) { msg.textContent = '這個網站沒有連接資料庫，無法建立分享連結。可以改用 PDF 或摘要圖卡分享。'; $('#shrGo').disabled = true; return; }
-    const sh = store.get('share'); if (sh && sh.id) show(sh);
-  };
+  const box = $('#shrBox'), out = $('#shrOut');
+  $('#shrOpen').onclick = () => { box.hidden = !box.hidden; $('#shrOpen').setAttribute('aria-expanded', String(!box.hidden)); };
   $('#shrGo').onclick = async () => {
-    const name = $('#shrName').value.trim().slice(0, 20), sh = store.get('share') || {};
-    $('#shrGo').disabled = true;
-    try {
-      const d = await api('share', {method: 'POST', body: {id: sh.id, editToken: sh.editToken, name, at: R0.at, version: R0.v, skipEcr: !!R0.skipEcr, ans: R0.ans}});
-      store.set('share', {id: d.id, editToken: d.editToken, name}); show({id: d.id, name});
-      msg.textContent = '連結已建立。之後重新作答，按「更新分享內容」即可換成最新結果。';
-      try { await navigator.clipboard.writeText($('#shrUrl').value); toast('已複製分享連結'); } catch (e) {}
-    } catch (e) { msg.textContent = '建立分享連結失敗，請稍後再試。'; }
-    finally { $('#shrGo').disabled = false; }
+    $('#shrUrl').value = location.origin + location.pathname + '#r-' + encodeShare(R0, $('#shrName').value.trim());
+    out.hidden = false;
+    try { await navigator.clipboard.writeText($('#shrUrl').value); toast('已複製分享連結'); } catch (e) { $('#shrUrl').select(); toast('連結已產生，請手動複製'); }
   };
   $('#shrCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#shrUrl').value); toast('已複製分享連結'); } catch (e) { $('#shrUrl').select(); toast('請手動複製連結'); } };
-  $('#shrStop').onclick = async () => {
-    const sh = store.get('share'); if (!sh) return;
-    try { await api('share', {method: 'DELETE', body: {id: sh.id, editToken: sh.editToken}}); store.del('share'); out.hidden = true; $('#shrGo').textContent = '建立連結'; msg.textContent = '已停止分享，原本的連結將無法開啟。'; }
-    catch (e) { msg.textContent = '停止分享失敗，請稍後再試。'; }
-  };
 }
 const num = v => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50; };
 function cleanShared(x) {
-  const keys = {big5: Object.keys(B5), mbti: AXES.map(a => a[0]), hexaco: Object.keys(HX), disc: ['D','I','S','C'], riasec: 'RIASEC'.split(''), ecr: ['焦慮','逃避']};
+  const keys = Object.fromEntries(SKEYS);
   const sc = {};
   for (const t in keys) { if (t === 'ecr' && (x.skipEcr || !x.sc || !x.sc.ecr)) continue; sc[t] = {}; keys[t].forEach(k => sc[t][k] = num(x.sc && x.sc[t] && x.sc[t][k])); }
   const at = isNaN(Date.parse(x.at)) ? new Date().toISOString() : new Date(x.at).toISOString();
-  return {at, v: String(x.version || ''), sc, skipEcr: !sc.ecr, name: String(x.name || '').slice(0, 20)};
+  return {at, v: String(x.version || ''), sc, skipEcr: !sc.ecr, name: String(x.name || '').replace(/[\u0000-\u001f]/g, '').slice(0, 20)};
 }
 let SHOW = null, SHARED = null, sharedMsg = '';
-async function loadShared(h) {
-  SHARED = null; sharedMsg = '讀取分享的報告中…'; renderReport();
-  await READY;
-  if (!API) { sharedMsg = '這個網站沒有連接資料庫，無法讀取分享的報告。'; return renderReport(); }
-  try { SHARED = cleanShared(await api('share?id=' + encodeURIComponent(h))); }
-  catch (e) { sharedMsg = e.status === 404 ? '這份報告不存在，或分享者已停止分享。' : '暫時無法讀取這份報告，請稍後再試。'; }
-  if (location.hash.slice(1) === 'r-' + h) renderReport();
+function loadShared(h) {
+  SHARED = null;
+  try { SHARED = decodeShare(h); } catch (e) { sharedMsg = '這個分享連結不完整或已損壞，請向對方再要一次。'; }
+  renderReport();
 }
 
 /* ---------- admin ---------- */
 let ALL = [];
 const panel = h => `<div class="sec" style="margin-top:0">${h}</div>`;
 async function renderAdmin(msg) {
-  const el = $('#aBody'); await READY;
+  const el = $('#aBody');
+  if (!COLLECT) { el.innerHTML = `<div class="empty"><h2>資料管理</h2><p style="margin-top:10px">本站目前沒有開啟資料蒐集，所以沒有作答資料。若要開啟，請見專案 README 的「開啟資料蒐集」。</p></div>`; return; }
+  await READY;
   if (!API) { el.innerHTML = `<div class="empty"><h2>資料管理</h2><p style="margin-top:10px">這個網站沒有連接資料庫，所以沒有可管理的作答資料。設定方式請見專案的 README。</p></div>`; return; }
   const pw = sess.get('admin');
   if (!pw) {
@@ -508,7 +520,7 @@ async function renderAdmin(msg) {
 
 /* ---------- routing & boot ---------- */
 function route() {
-  const h = location.hash.slice(1), sh = /^r-[A-Za-z0-9]{6,32}$/.test(h);
+  const h = location.hash.slice(1), sh = /^r-[A-Za-z0-9_-]{60,400}$/.test(h);
   SHOW = sh ? 'shared' : null;
   const v = sh ? 'report' : ['home','quiz','report','admin'].includes(h) ? h : 'home';
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
@@ -522,6 +534,9 @@ addEventListener('hashchange', route);
 $('#ctaSample').onclick = showSample;
 const d0 = store.get('draft'); if (d0 && d0.ans) S = d0;
 const l0 = store.get('last'); if (l0 && l0.sc) { RESULT = l0; saveNote = '這是你在這個瀏覽器的最近一次結果。'; }
+$('#dataNote').textContent = COLLECT
+  ? '開始作答前可以選擇是否同意提供資料。同意的話，作答與分數會以隨機產生的匿名代號存入本站資料庫，只有網站管理者能檢視，用於統計研究；不同意也能正常作答。'
+  : '你的作答與結果只會保存在這個瀏覽器，本站不會蒐集或上傳任何資料。可以下載 PDF 報告與摘要圖卡留存。';
 if (sess.get('admin')) $('#adminLink').hidden = false;
 route();
 
